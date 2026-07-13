@@ -173,6 +173,8 @@
         <div id="mainMenu" class="menu-content">
           <button class="menu-item" onclick="openImportModal(); toggleMenu();">📊 Excel Import</button>
           <button class="menu-item" onclick="exportToExcel(); toggleMenu();">📤 Export to Excel</button>
+          <button class="menu-item" id="exportAllBtn" onclick="exportAllPdf(); toggleMenu();">📄 All PDF</button>
+          <button class="menu-item" onclick="setAlertDays(); toggleMenu();">🔔 അലേർട്ട് സെറ്റിംഗ്സ്</button>
           <button class="menu-item" onclick="openChangeUsernameModal(); toggleMenu();">🏷️ Username മാറ്റുക</button>
           <button class="menu-item" onclick="openChangePasswordModal(); toggleMenu();">🔑 Password മാറ്റുക</button>
           <button class="menu-item" onclick="openThemeModal(); toggleMenu();">🎨 തീം (Theme)</button>
@@ -195,7 +197,7 @@
       <div class="value" id="sumExpected">₹0</div>
     </div>
     <div class="sum-card">
-      <div class="label">മൊത്തം കൊടുക്കാനുള്ളത്</div>
+      <div class="label">മൊത്തം കൊടുക്കുവാനുള്ളത്</div>
       <div class="value" id="sumDue">₹0</div>
     </div>
   </div>
@@ -206,13 +208,35 @@
 
   <div class="toolbar">
     <button class="btn btn-primary" onclick="openPersonModal()">+ പുതിയ ആളെ ചേർക്കുക</button>
-    <button class="btn btn-ghost" id="exportAllBtn" onclick="exportAllPdf()">📄 All PDF</button>
+    <button class="btn btn-ghost" onclick="openQuickDateModal()">📅 പയറ്റ് തീയതി കുറിക്കുക</button>
   </div>
+
+  <div id="alertContainer" style="max-width:700px; margin: 16px auto 0; padding: 0 14px;"></div>
 
   <main id="mainList"></main>
 </div>
 
-<!-- ABOUT MODAL -->
+<div class="modal-overlay" id="quickDateModalOverlay">
+  <div class="modal">
+    <h2>📅 പയറ്റ് തീയതി കുറിക്കുക</h2>
+    <div style="font-size:0.8rem;color:#6b5d44;margin-bottom:10px;line-height:1.5;">നിലവിലുള്ള ഒരാളുടെ അടുത്ത പയറ്റ് തീയതി പെട്ടെന്ന് രേഖപ്പെടുത്താൻ ഇത് ഉപയോഗിക്കാം.</div>
+    <div class="field">
+      <label>ആളെ തിരഞ്ഞെടുക്കുക</label>
+      <select id="quickDatePersonSelect">
+        <option value="">-- ആളെ തിരഞ്ഞെടുക്കുക --</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>അടുത്ത പയറ്റ് തീയതി</label>
+      <input type="date" id="quickDateInput">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeQuickDateModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveQuickDate()">സേവ് ചെയ്യുക</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="aboutModalOverlay">
   <div class="modal" style="text-align:center;">
     <div style="font-size:3rem; margin-bottom:10px;">📖</div>
@@ -299,7 +323,7 @@
     <h2>All Users Management</h2>
     <div class="field">
       <label>പുതിയ ആളുടെ പേര്</label>
-      <input type="text" id="newUserName" placeholder="പുതിയ യൂസറുടെ പേര് (ഉദാ: abdul)">
+      <input type="text" id="newUserName" placeholder="പുതിയ യൂസറുടെ പേര് (ഉദാ: Abdul Muneer)">
     </div>
     <div class="field">
       <label>Password</label>
@@ -311,6 +335,11 @@
     </div>
     <div id="userMgmtSection" style="margin-top:24px;border-top:2px dashed var(--line);padding-top:16px;">
       <h2 style="font-size:1rem; margin-bottom:8px;">നിലവിലുള്ള യൂസർമാരും വിവരങ്ങളും</h2>
+      
+      <div class="field" style="margin-bottom:10px;">
+        <input type="text" id="adminUserSearchBox" placeholder="🔍 യൂസറെ തിരയുക (പേര്, ID)..." oninput="filterAdminUsers()">
+      </div>
+      
       <div id="adminUserList" style="max-height:220px; overflow-y:auto; border:1px solid #eee; padding:5px; border-radius:5px; background:#fff;"></div>
     </div>
   </div>
@@ -330,9 +359,15 @@
         <input type="text" id="pName" placeholder="ഉദാ: അമ്മത് ഹാജി">
       </div>
     </div>
-    <div class="field">
-      <label>ഫോൺ നമ്പർ (ഓപ്ഷണൽ)</label>
-      <input type="tel" id="pPhone" placeholder="+91 XXXXX XXXXX">
+    <div class="field-row">
+      <div class="field">
+        <label>ഫോൺ നമ്പർ (ഓപ്ഷണൽ)</label>
+        <input type="tel" id="pPhone" placeholder="+91 XXXXX XXXXX">
+      </div>
+      <div class="field">
+        <label>അടുത്ത പയറ്റ് തീയതി (ഓർമ്മപ്പെടുത്താൻ)</label>
+        <input type="date" id="pUpcomingDate">
+      </div>
     </div>
     <div id="firstTxFields">
       <div class="field-row">
@@ -443,6 +478,7 @@ let MASTER_API_URL = localStorage.getItem('payat_master_api') || DEFAULT_API_URL
 
 let sheetUrl = "";
 let ledger = []; 
+let allAdminUsersList = []; // 🌟 യൂസർമാരുടെ ലിസ്റ്റ് സേവ് ചെയ്യാൻ
 let outStartDate = localStorage.getItem('payat_out_start_date') || '';
 let syncTimer = null;
 let tapCount = 0;
@@ -574,6 +610,73 @@ function personTotals(p){
   return {out, inAmt, lastOut, due: out - inAmt};
 }
 
+function setAlertDays() {
+  const current = localStorage.getItem('payat_alert_days') || '2';
+  const val = prompt("എത്ര ദിവസം മുമ്പ് മുതൽ നോട്ടിഫിക്കേഷൻ അലേർട്ട് കാണിക്കണം? (ഉദാഹരണത്തിന്: 5)", current);
+  if (val !== null && !isNaN(val) && val.trim() !== "") {
+    localStorage.setItem('payat_alert_days', parseInt(val));
+    renderAll();
+    alert("നോട്ടിഫിക്കേഷൻ സെറ്റിംഗ്സ് വിജയകരമായി സേവ് ചെയ്തു!");
+  }
+}
+
+function openQuickDateModal(){
+  const s=document.getElementById('quickDatePersonSelect');
+  s.innerHTML='<option value="">-- ആളെ തിരഞ്ഞെടുക്കുക --</option>';
+  [...ledger].sort((a,b)=>a.name.localeCompare(b.name)).forEach(p=>{
+    s.innerHTML+=`<option value="${p.id}">${p.name} ${p.customId?'('+p.customId+')':''}</option>`;
+  });
+  document.getElementById('quickDateInput').value='';
+  document.getElementById('quickDateModalOverlay').classList.add('open');
+}
+function closeQuickDateModal(){document.getElementById('quickDateModalOverlay').classList.remove('open')}
+function saveQuickDate(){
+  const pid=document.getElementById('quickDatePersonSelect').value;
+  const d=document.getElementById('quickDateInput').value;
+  if(!pid){alert('ആളെ തിരഞ്ഞെടുക്കുക!');return;}
+  if(!d){alert('തീയതി നൽകുക!');return;}
+  const p=ledger.find(x=>x.id===pid);
+  if(p){
+    p.upcomingDate=d;
+    closeQuickDateModal();
+    renderAll();
+    queueSync();
+    alert(p.name+'-ന്റെ പയറ്റ് തീയതി വിജയകരമായി കുറിച്ചു!');
+  }
+}
+
+function checkAlerts() {
+  const container = document.getElementById('alertContainer');
+  if(!container) return;
+  container.innerHTML = ''; 
+  
+  const alertDays = parseInt(localStorage.getItem('payat_alert_days')) || 2;
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  
+  ledger.forEach(p => {
+    if (p.upcomingDate) {
+      const rDate = new Date(p.upcomingDate);
+      rDate.setHours(0,0,0,0);
+      const diffTime = rDate - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays <= alertDays && diffDays >= 0) {
+        const msg = diffDays === 0 ? `ഇന്ന് <b>${p.name}</b>-ന്റെ പയറ്റ് തീയതിയാണ്!` : `<b>${p.name}</b>-ന്റെ പയറ്റ് ${diffDays} ദിവസത്തിനുള്ളിലുണ്ട് (${fmtDateShort(p.upcomingDate)}).`;
+        const alertDiv = document.createElement('div');
+        alertDiv.style = "background: #fff3cd; padding: 12px 15px; border-left: 5px solid #ffc107; margin-bottom: 10px; cursor: pointer; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 0.88rem; color: #2c2418;";
+        alertDiv.innerHTML = `⚠️ <b>ഓർമ്മപ്പെടുത്തൽ:</b> ${msg}`;
+        alertDiv.onclick = () => {
+          p._open = true;
+          renderAll();
+          document.getElementById(`body-${p.id}`)?.scrollIntoView({ behavior: 'smooth' });
+        };
+        container.appendChild(alertDiv);
+      }
+    }
+  });
+}
+
 function renderAll(){
   const searchTerm = (document.getElementById('searchBox')?.value || '').trim().toLowerCase();
   const filtered = searchTerm
@@ -581,8 +684,8 @@ function renderAll(){
     : ledger;
 
   let totalOutFromDate=0, totalReceivable=0, totalPayable=0;
-  let countToReceive = 0; // കിട്ടാനുള്ളവരുടെ എണ്ണം
-  let countToPay = 0; // കൊടുക്കാനുള്ളവരുടെ എണ്ണം
+  let countToReceive = 0; 
+  let countToPay = 0; 
 
   ledger.forEach(p=>{
     const t = personTotals(p);
@@ -621,10 +724,12 @@ function renderAll(){
   const main = document.getElementById('mainList');
   if(ledger.length===0){
     main.innerHTML = `<div class="empty-state"><div class="big">🗒️</div>ആരുമില്ല ഇതുവരെ.<br>"+ പുതിയ ആൾ" അമർത്തി തുടങ്ങാം.</div>`;
+    checkAlerts();
     return;
   }
   if(filtered.length===0){
     main.innerHTML = `<div class="empty-state"><div class="big">🔍</div>ഒന്നും കണ്ടെത്തിയില്ല.</div>`;
+    checkAlerts();
     return;
   }
 
@@ -633,6 +738,12 @@ function renderAll(){
     const dueClass = t.due > 0 ? 'due' : (t.due < 0 ? 'clear' : '');
     const dueLabel = t.due > 0 ? 'കിട്ടാൻ ബാക്കി' : (t.due < 0 ? 'കൊടുക്കുവാൻ (Credit)' : 'ഇടപാടില്ല');
     const isOpen = p._open ? 'open' : '';
+    
+    let metaInfo = p.phone || '';
+    if(p.upcomingDate) {
+       metaInfo += (metaInfo ? ' • ' : '') + `<span style="color:var(--maroon);font-weight:600;">അടുത്ത പയറ്റ്: ${fmtDateShort(p.upcomingDate)}</span>`;
+    }
+
     const rows = p.transactions.slice().sort((a,b)=> a.date.localeCompare(b.date)).map(tx=>{
       const tagClass = tx.type==='out' ? 'tag-out' : 'tag-in';
       const tagLabel = tx.type==='out' ? 'പോയത് (Debit)' : 'വന്നത് (Credit)';
@@ -652,7 +763,7 @@ function renderAll(){
       <div class="entry-head" onclick="toggleOpen('${p.id}')">
         <div>
           <div class="entry-name">${p.customId ? '<span class=\"id-badge\">'+p.customId+'</span> ' : ''}${p.name}</div>
-          <div class="entry-meta">${p.phone||''}</div>
+          <div class="entry-meta">${metaInfo}</div>
         </div>
         <div class="entry-balance">
           <div class="bnum ${dueClass}">${fmt(Math.abs(t.due))}</div>
@@ -676,6 +787,8 @@ function renderAll(){
       </div>
     </div>`;
   }).join('');
+
+  checkAlerts();
 }
 
 function toggleOpen(id){
@@ -691,6 +804,7 @@ function openPersonModal(){
   document.getElementById('pCustomId').value='';
   document.getElementById('pName').value='';
   document.getElementById('pPhone').value='';
+  document.getElementById('pUpcomingDate').value='';
   document.getElementById('pDate').value=todayStr();
   document.getElementById('pPlace').value='';
   document.getElementById('pAmount').value='';
@@ -706,6 +820,7 @@ function openPersonEditOnly(personId){
   document.getElementById('pCustomId').value = p.customId || '';
   document.getElementById('pName').value = p.name;
   document.getElementById('pPhone').value = p.phone || '';
+  document.getElementById('pUpcomingDate').value = p.upcomingDate || '';
   document.getElementById('personModalOverlay').classList.add('open');
 }
 
@@ -713,6 +828,8 @@ function savePerson(){
   const editId = document.getElementById('editPersonId').value;
   const name = document.getElementById('pName').value.trim();
   const customId = document.getElementById('pCustomId').value.trim();
+  const upcomingD = document.getElementById('pUpcomingDate').value || '';
+
   if(!name){ alert('പേര് നൽകുക'); return; }
 
   const idClash = ledger.find(x => x.customId && customId && x.customId.toLowerCase()===customId.toLowerCase() && x.id!==editId);
@@ -723,6 +840,7 @@ function savePerson(){
     p.name = name;
     p.customId = customId;
     p.phone = document.getElementById('pPhone').value.trim();
+    p.upcomingDate = upcomingD;
     closePersonModal();
     renderAll();
     queueSync();
@@ -741,8 +859,8 @@ function savePerson(){
   if(creditAmount>0){ transactions.push({ id: uid(), date, place, type:'in', amount: creditAmount, note }); }
 
   const person = {
-    id: uid(), customId, name, phone: document.getElementById('pPhone').value.trim(), _open: true,
-    transactions
+    id: uid(), customId, name, phone: document.getElementById('pPhone').value.trim(), 
+    upcomingDate: upcomingD, _open: true, transactions
   };
   ledger.unshift(person);
   closePersonModal();
@@ -850,7 +968,7 @@ function processExcelImport() {
         const tx = { id: uid(), date: txDate, place: place, type: 'out', amount: amount, note: note };
         let person = ledger.find(p => p.name === name || (customId && p.customId === customId));
         if(person) { person.transactions.push(tx); } 
-        else { ledger.unshift({ id: uid(), customId: customId, name: name, phone: phone, _open: false, transactions: [tx] }); }
+        else { ledger.unshift({ id: uid(), customId: customId, name: name, phone: phone, upcomingDate:'', _open: false, transactions: [tx] }); }
         addedCount++;
       }
     }
@@ -865,7 +983,7 @@ function processExcelImport() {
 function exportToExcel() {
   if(ledger.length === 0) { alert('ഡാറ്റ ഒന്നും ഇല്ല.'); return; }
   let csvContent = '\uFEFF'; 
-  csvContent += "ID,പേര്,ഫോൺ,തിയ്യതി,സ്ഥലം,തരം,തുക,കുറിപ്പ്,ബാക്കി (Net)\n";
+  csvContent += "ID,പേര്,ഫോൺ,അടുത്ത പയറ്റ്,തിയ്യതി,സ്ഥലം,തരം,തുക,കുറിപ്പ്,ബാക്കി (Net)\n";
   const escapeCSV = (str) => {
     if (str === null || str === undefined) return '""';
     return '"' + String(str).replace(/"/g, '""') + '"';
@@ -875,9 +993,10 @@ function exportToExcel() {
     const t = personTotals(p);
     const netDue = Math.abs(t.due);
     const dueStatus = t.due > 0 ? `കിട്ടാൻ ബാക്കി: ${netDue}` : (t.due < 0 ? `കൊടുക്കുവാൻ (Credit): ${netDue}` : 'തീർന്നു');
+    const upcoming = p.upcomingDate ? fmtDateShort(p.upcomingDate) : '';
 
     if(p.transactions.length === 0) {
-      csvContent += [escapeCSV(p.customId), escapeCSV(p.name), escapeCSV(p.phone), '""', '""', '""', '""', '""', escapeCSV(dueStatus)].join(',') + '\n';
+      csvContent += [escapeCSV(p.customId), escapeCSV(p.name), escapeCSV(p.phone), escapeCSV(upcoming), '""', '""', '""', '""', '""', escapeCSV(dueStatus)].join(',') + '\n';
     } else {
       const sortedTx = p.transactions.slice().sort((a,b)=>a.date.localeCompare(b.date));
       sortedTx.forEach((tx, idx) => {
@@ -885,7 +1004,7 @@ function exportToExcel() {
         const netStatus = idx === 0 ? dueStatus : ''; 
 
         csvContent += [
-          escapeCSV(p.customId), escapeCSV(p.name), escapeCSV(p.phone), escapeCSV(fmtDate(tx.date)),
+          escapeCSV(p.customId), escapeCSV(p.name), escapeCSV(p.phone), escapeCSV(upcoming), escapeCSV(fmtDate(tx.date)),
           escapeCSV(tx.place), escapeCSV(typeLabel), escapeCSV(tx.amount),
           escapeCSV(tx.note), escapeCSV(netStatus)
         ].join(',') + '\n';
@@ -919,7 +1038,7 @@ function buildPersonHtmlBlock(p){
   return `<div style="margin-bottom:26px;page-break-inside:avoid;">
     <div style="background:${themeColor};color:#faf4e6;padding:10px 14px;border-radius:6px 6px 0 0;">
       <div style="font-size:16px;font-weight:700;">${p.customId ? '['+p.customId+'] ' : ''}${p.name}</div>
-      <div style="font-size:11px;opacity:0.85;">${p.phone||''}</div>
+      <div style="font-size:11px;opacity:0.85;">${p.phone||''} ${p.upcomingDate ? ' | അടുത്ത പയറ്റ്: '+fmtDateShort(p.upcomingDate) : ''}</div>
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px;">
       <thead>
@@ -1017,7 +1136,7 @@ async function exportAllPdf(){
             rowsHtml += `<tr>
               <td style="border:1px solid #888; padding:5px; font-weight:bold;">${nameStr}</td>
               <td style="border:1px solid #888; padding:5px;">${p.phone||'-'}</td>
-              <td colspan="6" style="border:1px solid #888; padding:5px; text-align:center; color:#555;">ഇടപാടുകൾ ഇല്ല</td>
+              <td colspan="5" style="border:1px solid #888; padding:5px; text-align:center; color:#555;">ഇടപാടുകൾ ഇല്ല</td>
               <td style="border:1px solid #888; padding:5px; font-weight:bold; color:${dueColor};">${balStr}</td>
             </tr>`;
           } else {
@@ -1289,32 +1408,57 @@ function logout(){
   location.reload(); 
 }
 
+// 🌟 പുതിയ അഡ്മിൻ യൂസർമാരെ കാണിക്കാനും, സെർച്ച് ചെയ്യാനുമുള്ള ഫംഗ്ഷനുകൾ
 async function openAddUserModal(){
   document.getElementById('newUserName').value='';
   document.getElementById('newUserPass').value='';
+  document.getElementById('adminUserSearchBox').value=''; // സെർച്ച് ബോക്സ് ക്ലിയർ ചെയ്യാൻ
   document.getElementById('addUserModalOverlay').classList.add('open');
   
   const box = document.getElementById('adminUserList');
   box.innerHTML = '<div style="font-size:0.8rem;color:#9b8c6c;">Loading Users...</div>';
   try{
     const res = await fetch(MASTER_API_URL + '?action=getUsers');
-    const users = await res.json();
-    box.innerHTML = users.map(u => {
-      const isAdm = (u.username.toLowerCase() === 'admin');
-      const passDisplay = isAdm ? '****' : u.password; 
-      const resetBtn = isAdm ? '' : `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:0.7rem;" onclick="resetUserPass('${u.username}')">Reset Pass</button>`;
-      
-      return `<div style="font-family:'Courier Prime',monospace;font-size:0.8rem;padding:8px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-weight:bold;color:var(--maroon-deep);margin-top:2px;">👤 User: ${u.username}</div>
-          <div style="color:#7a6c4f;font-size:0.75rem;margin-top:2px;">🔑 Pass: <b style="color:var(--ink);">${passDisplay}</b></div>
-        </div>
-        <div>${resetBtn}</div>
-      </div>`;
-    }).join('');
+    allAdminUsersList = await res.json(); // ഡാറ്റ ഗ്ലോബൽ വേരിയബിളിൽ സേവ് ചെയ്യുന്നു
+    renderAdminUsers(allAdminUsersList);
   }catch(err){
     box.innerHTML = '<div style="font-size:0.8rem;color:var(--maroon);">Users Load ആയില്ല.</div>';
   }
+}
+
+function filterAdminUsers() {
+  const s = document.getElementById('adminUserSearchBox').value.trim().toLowerCase();
+  if(!s) {
+    renderAdminUsers(allAdminUsersList);
+    return;
+  }
+  const filtered = allAdminUsersList.filter(u => 
+    (u.username && u.username.toLowerCase().includes(s)) || 
+    (u.url_id && u.url_id.toLowerCase().includes(s))
+  );
+  renderAdminUsers(filtered);
+}
+
+function renderAdminUsers(users) {
+  const box = document.getElementById('adminUserList');
+  if(users.length === 0) {
+    box.innerHTML = '<div style="font-size:0.8rem;color:#9b8c6c;padding:5px;">ആളുകളെ കണ്ടെത്തിയില്ല.</div>';
+    return;
+  }
+  box.innerHTML = users.map(u => {
+    const isAdm = (u.username.toLowerCase() === 'admin');
+    const passDisplay = isAdm ? '****' : u.password; 
+    const resetBtn = isAdm ? '' : `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:0.7rem;" onclick="resetUserPass('${u.username}')">Reset Pass</button>`;
+    
+    return `<div style="font-family:'Courier Prime',monospace;font-size:0.8rem;padding:8px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="color:#2f5d3a;font-size:0.7rem;">🔗 Link ID: <b>${u.url_id}</b></div>
+        <div style="font-weight:bold;color:var(--maroon-deep);margin-top:2px;">👤 User: ${u.username}</div>
+        <div style="color:#7a6c4f;font-size:0.75rem;margin-top:2px;">🔑 Pass: <b style="color:var(--ink);">${passDisplay}</b></div>
+      </div>
+      <div>${resetBtn}</div>
+    </div>`;
+  }).join('');
 }
 
 async function resetUserPass(targetUser) {
