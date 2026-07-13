@@ -171,6 +171,10 @@
       <div class="menu-container">
         <button class="menu-btn" onclick="toggleMenu()">⋮</button>
         <div id="mainMenu" class="menu-content">
+          <button class="menu-item" onclick="setFilterMode('all'); toggleMenu();" style="border-bottom: 2px solid var(--line);">👥 എല്ലാവരെയും കാണിക്കുക</button>
+          <button class="menu-item" onclick="setFilterMode('receivable'); toggleMenu();">🟢 കിട്ടാനുള്ളവർ മാത്രം</button>
+          <button class="menu-item" onclick="setFilterMode('payable'); toggleMenu();" style="border-bottom: 2px solid var(--line);">🔴 കൊടുക്കാനുള്ളവർ മാത്രം</button>
+          
           <button class="menu-item" onclick="openImportModal(); toggleMenu();">📊 Excel Import</button>
           <button class="menu-item" onclick="exportToExcel(); toggleMenu();">📤 Export to Excel</button>
           <button class="menu-item" id="exportAllBtn" onclick="exportAllPdf(); toggleMenu();">📄 All PDF</button>
@@ -241,13 +245,14 @@
   <div class="modal" style="text-align:center;">
     <div style="font-size:3rem; margin-bottom:10px;">📖</div>
     <h2 style="border-bottom:none; padding-bottom:0; margin-bottom:5px;">Panapayatt Ledger</h2>
-    <p style="font-family:'Courier Prime',monospace; font-size:0.8rem; color:#7a6c4f; margin-top:0;">Version: v1.7.0</p>
+    <p style="font-family:'Courier Prime',monospace; font-size:0.8rem; color:#7a6c4f; margin-top:0;">Version: v1.8.0</p>
     <p style="font-size:0.9rem; color:var(--maroon-deep); margin:15px 0; line-height:1.5;">പണപ്പയറ്റ് ഇടപാടുകൾ സുരക്ഷിതമായി രേഖപ്പെടുത്താനും, ഡെബിറ്റ്/ക്രെഡിറ്റ് കണക്കുകൾ എളുപ്പത്തിൽ കൈകാര്യം ചെയ്യാനും വേണ്ടി തയ്യാറാക്കിയ ഡിജിറ്റൽ ലെഡ്ജർ.</p>
     <div style="text-align:left; background:#faf4e6; padding:15px; border-radius:5px; border:1px dashed var(--line); margin-bottom:15px;">
       <div style="font-size:0.8rem; font-weight:bold; color:var(--maroon); margin-bottom:5px;">Features:</div>
       <ul style="margin:0; padding-left:20px; font-size:0.85rem; color:#6b5d44; line-height:1.6;">
         <li>Credit & Debit Management</li>
         <li>Detailed PDF & Excel Reports</li>
+        <li>Smart Alerts & Filter Views</li>
         <li>Members Database</li>
         <li>Secure Cloud Sync</li>
       </ul>
@@ -335,11 +340,9 @@
     </div>
     <div id="userMgmtSection" style="margin-top:24px;border-top:2px dashed var(--line);padding-top:16px;">
       <h2 style="font-size:1rem; margin-bottom:8px;">നിലവിലുള്ള യൂസർമാരും വിവരങ്ങളും</h2>
-      
       <div class="field" style="margin-bottom:10px;">
         <input type="text" id="adminUserSearchBox" placeholder="🔍 യൂസറെ തിരയുക (പേര്, ID)..." oninput="filterAdminUsers()">
       </div>
-      
       <div id="adminUserList" style="max-height:220px; overflow-y:auto; border:1px solid #eee; padding:5px; border-radius:5px; background:#fff;"></div>
     </div>
   </div>
@@ -478,8 +481,9 @@ let MASTER_API_URL = localStorage.getItem('payat_master_api') || DEFAULT_API_URL
 
 let sheetUrl = "";
 let ledger = []; 
-let allAdminUsersList = []; // 🌟 യൂസർമാരുടെ ലിസ്റ്റ് സേവ് ചെയ്യാൻ
+let allAdminUsersList = []; 
 let outStartDate = localStorage.getItem('payat_out_start_date') || '';
+let filterMode = 'all'; // 🌟 പുതിയ ഫിൽറ്റർ സ്റ്റേറ്റ്
 let syncTimer = null;
 let tapCount = 0;
 let tapTimer = null;
@@ -677,16 +681,26 @@ function checkAlerts() {
   });
 }
 
+// 🌟 ഫിൽറ്റർ മാറ്റാനുള്ള ഫംഗ്ഷൻ
+function setFilterMode(mode) {
+  filterMode = mode;
+  const sb = document.getElementById('searchBox');
+  if(sb) {
+    if(mode === 'receivable') sb.placeholder = "🔍 കിട്ടാനുള്ളവരിൽ തിരയുക...";
+    else if(mode === 'payable') sb.placeholder = "🔍 കൊടുക്കാനുള്ളവരിൽ തിരയുക...";
+    else sb.placeholder = "🔍 ID അല്ലെങ്കിൽ പേര് വെച്ച് സെർച്ച് ചെയ്യുക...";
+  }
+  renderAll();
+}
+
 function renderAll(){
   const searchTerm = (document.getElementById('searchBox')?.value || '').trim().toLowerCase();
-  const filtered = searchTerm
-    ? ledger.filter(p => (p.customId||'').toLowerCase().includes(searchTerm) || p.name.toLowerCase().includes(searchTerm))
-    : ledger;
 
   let totalOutFromDate=0, totalReceivable=0, totalPayable=0;
   let countToReceive = 0; 
   let countToPay = 0; 
 
+  // കാർഡുകളിൽ കാണിക്കാൻ വേണ്ടി എല്ലാ ഡാറ്റയും വച്ച് കണക്കാക്കുന്നു
   ledger.forEach(p=>{
     const t = personTotals(p);
     if(t.due > 0){ 
@@ -721,6 +735,19 @@ function renderAll(){
   const outDateLabelEl = document.getElementById('outStartDateLabel');
   if(outDateLabelEl){ outDateLabelEl.textContent = outStartDate ? (fmtDateShort(outStartDate)+' മുതൽ') : 'തുടക്കം മുതൽ ഇന്ന് വരെ'; }
 
+  // 🌟 താഴെയുള്ള ലിസ്റ്റിൽ കാണിക്കാൻ വേണ്ടി ഡാറ്റ ഫിൽറ്റർ ചെയ്യുന്നു
+  let filtered = ledger;
+  
+  if (filterMode === 'receivable') {
+    filtered = filtered.filter(p => personTotals(p).due > 0);
+  } else if (filterMode === 'payable') {
+    filtered = filtered.filter(p => personTotals(p).due < 0);
+  }
+
+  if (searchTerm) {
+    filtered = filtered.filter(p => (p.customId||'').toLowerCase().includes(searchTerm) || p.name.toLowerCase().includes(searchTerm));
+  }
+
   const main = document.getElementById('mainList');
   if(ledger.length===0){
     main.innerHTML = `<div class="empty-state"><div class="big">🗒️</div>ആരുമില്ല ഇതുവരെ.<br>"+ പുതിയ ആൾ" അമർത്തി തുടങ്ങാം.</div>`;
@@ -728,7 +755,7 @@ function renderAll(){
     return;
   }
   if(filtered.length===0){
-    main.innerHTML = `<div class="empty-state"><div class="big">🔍</div>ഒന്നും കണ്ടെത്തിയില്ല.</div>`;
+    main.innerHTML = `<div class="empty-state"><div class="big">🔍</div>ഈ ലിസ്റ്റിൽ ആരുമില്ല!</div>`;
     checkAlerts();
     return;
   }
@@ -736,7 +763,7 @@ function renderAll(){
   main.innerHTML = filtered.map(p=>{
     const t = personTotals(p);
     const dueClass = t.due > 0 ? 'due' : (t.due < 0 ? 'clear' : '');
-    const dueLabel = t.due > 0 ? 'കിട്ടാൻ ബാക്കി' : (t.due < 0 ? 'കൊടുക്കുവാൻ (Credit)' : 'ഇടപാടില്ല');
+    const dueLabel = t.due > 0 ? 'കിട്ടാൻ ബാക്കി' : (t.due < 0 ? 'കൊടുക്കുവാൻ (Credit)' : 'തീർന്നു');
     const isOpen = p._open ? 'open' : '';
     
     let metaInfo = p.phone || '';
@@ -1129,7 +1156,7 @@ async function exportAllPdf(){
         chunk.forEach(p => {
           const t = personTotals(p);
           const nameStr = (p.customId ? `[${p.customId}] ` : '') + p.name;
-          const balStr = t.due > 0 ? `കിട്ടാൻ: ${fmt(Math.abs(t.due))}` : (t.due < 0 ? `കൊടുക്കുവാൻ: ${fmt(Math.abs(t.due))}` : 'തീർന്നു');
+          const balStr = t.due > 0 ? `കിട്ടാൻ: ${fmt(Math.abs(t.due))}` : (t.due < 0 ? `കൊടുക്കുവാൻ: ${fmt(Math.abs(t.due))}` : 'ഇടപാടില്ല');
           const dueColor = t.due > 0 ? themeColor : '#2f5d3a';
           
           if(p.transactions.length === 0) {
@@ -1356,7 +1383,6 @@ async function attemptLogin(){
     }
     
     localStorage.setItem('payat_logged_user', match.username);
-    // 🌟 ഷീറ്റിലെ real_name അല്ലെങ്കിൽ fullname കോളം തനിയെ എടുക്കുന്നു
     let finalFullName = match.real_name || match.fullname || match.name || match.username;
     localStorage.setItem('payat_logged_fullname', finalFullName);
     localStorage.setItem('payat_url_id', match.url_id || '');
@@ -1408,18 +1434,18 @@ function logout(){
   location.reload(); 
 }
 
-// 🌟 പുതിയ അഡ്മിൻ യൂസർമാരെ കാണിക്കാനും, സെർച്ച് ചെയ്യാനുമുള്ള ഫംഗ്ഷനുകൾ
+// 🌟 അഡ്മിൻ യൂസർമാരെ കാണിക്കാനും, സെർച്ച് ചെയ്യാനുമുള്ള ഫംഗ്ഷനുകൾ
 async function openAddUserModal(){
   document.getElementById('newUserName').value='';
   document.getElementById('newUserPass').value='';
-  document.getElementById('adminUserSearchBox').value=''; // സെർച്ച് ബോക്സ് ക്ലിയർ ചെയ്യാൻ
+  document.getElementById('adminUserSearchBox').value=''; 
   document.getElementById('addUserModalOverlay').classList.add('open');
   
   const box = document.getElementById('adminUserList');
   box.innerHTML = '<div style="font-size:0.8rem;color:#9b8c6c;">Loading Users...</div>';
   try{
     const res = await fetch(MASTER_API_URL + '?action=getUsers');
-    allAdminUsersList = await res.json(); // ഡാറ്റ ഗ്ലോബൽ വേരിയബിളിൽ സേവ് ചെയ്യുന്നു
+    allAdminUsersList = await res.json(); 
     renderAdminUsers(allAdminUsersList);
   }catch(err){
     box.innerHTML = '<div style="font-size:0.8rem;color:var(--maroon);">Users Load ആയില്ല.</div>';
