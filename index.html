@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>പയറ്റ് കണക്ക് | Payat Ledger</title>
+<link rel="manifest" href="manifest.json">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Tiro+Malayalam:ital@0;1&family=Noto+Sans+Malayalam:wght@400;500;600;700&family=Courier+Prime:wght@400;700&display=swap');
 
@@ -171,6 +172,8 @@
       <div class="menu-container">
         <button class="menu-btn" onclick="toggleMenu()">⋮</button>
         <div id="mainMenu" class="menu-content">
+          <button class="menu-item" id="installAppBtn" onclick="installApp(); toggleMenu();" style="display:none; color: var(--maroon); font-weight: bold;">📱 ഹോം സ്ക്രീനിൽ ആഡ് ചെയ്യുക</button>
+          
           <button class="menu-item" onclick="setFilterMode('all'); toggleMenu();" style="border-bottom: 2px solid var(--line);">👥 എല്ലാവരെയും കാണിക്കുക</button>
           <button class="menu-item" onclick="setFilterMode('receivable'); toggleMenu();">🟢 കിട്ടാനുള്ളവർ മാത്രം</button>
           <button class="menu-item" onclick="setFilterMode('payable'); toggleMenu();" style="border-bottom: 2px solid var(--line);">🔴 കൊടുക്കാനുള്ളവർ മാത്രം</button>
@@ -1528,6 +1531,41 @@ async function saveNewUser(){
     openAddUserModal(); 
   }catch(err){ alert('User ചേർക്കാൻ പറ്റിയില്ല.');
   } finally { btn.textContent = oldText; btn.disabled = false; }
+}
+
+// ================== ADD TO HOME SCREEN LOGIC ==================
+let deferredPrompt;
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  
+  if (isMobile) {
+    document.getElementById('installAppBtn').style.display = 'block';
+  }
+});
+
+if (isIOS) {
+  document.getElementById('installAppBtn').style.display = 'block';
+}
+
+function installApp() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === 'accepted') {
+        console.log('User installed the app');
+        document.getElementById('installAppBtn').style.display = 'none';
+      }
+      deferredPrompt = null;
+    });
+  } else if (isIOS) {
+    alert("iPhone-ൽ ഈ ആപ്പ് ഹോം സ്ക്രീനിലേക്ക് മാറ്റാൻ:\n\n1. താഴെയുള്ള 'Share' ഐക്കൺ (ചതുരത്തിൽ നിന്നും മുകളിലേക്ക് ആരോ ഉള്ള ഐക്കൺ) അമർത്തുക.\n2. അതിൽ താഴേക്ക് സ്ക്രോൾ ചെയ്ത് 'Add to Home Screen' എന്നത് തിരഞ്ഞെടുക്കുക.");
+  } else {
+    alert("നിങ്ങളുടെ ബ്രൗസറിൽ ഇൻസ്റ്റാൾ ചെയ്യാനുള്ള സൗകര്യം ലഭ്യമല്ല, അല്ലെങ്കിൽ ആപ്പ് ഇതിനകം ഇൻസ്റ്റാൾ ചെയ്തിട്ടുണ്ട്.");
+  }
 }
 
 async function initSystem() {
